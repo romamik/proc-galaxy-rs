@@ -44,3 +44,8 @@ Root block generates some stars, just coordinates, brightness, etc. And random s
 Subblocks get their random seeds and list of level-0 stars from parent block that belong to them. Each subblock generates level-1 details for that stars so this stars can be rendered in more details. And also generate new level-0 stars, so that we can zoom in further.
 
 This idea can be easily expended to galaxies. At level-0 galaxy is just like star: a point with coordinates. At level-1 it can have type (like spiral, elliptical) and other parameters like number of arms for spiral galaxy. At this level it can be rendered as small texture. And at level-2 it can pass star density distribution parameters to subblocks so that they can generate actual stars.
+
+## Day2 part 2
+
+Spent one hour and half.
+Minor improvements.
