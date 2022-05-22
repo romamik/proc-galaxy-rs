@@ -145,6 +145,37 @@ impl ViewPosition {
     }
 }
 
+fn draw_block(mat: &Mat3, color: Color, subcolors: &[Color]) {
+    if let Some(&color) = subcolors.first() {
+        let subcolors = &subcolors[1..];
+        for i in 0..SUBBLOCK_COUNT {
+            for j in 0..SUBBLOCK_COUNT {
+                let mat = mat
+                    .mul_mat3(&Mat3::from_scale(Vec2::new(
+                        1.0 / SUBBLOCK_COUNT_F,
+                        1.0 / SUBBLOCK_COUNT_F,
+                    )))
+                    .mul_mat3(&Mat3::from_translation(Vec2::new(i as f32, j as f32)));
+
+                draw_block(&mat, color, &subcolors);
+            }
+        }
+    }
+
+    let p00 = mat.transform_point2(Vec2::new(0.0, 0.0));
+    let p10 = mat.transform_point2(Vec2::new(1.0, 0.0));
+    let p01 = mat.transform_point2(Vec2::new(0.0, 1.0));
+    let p11 = mat.transform_point2(Vec2::new(1.0, 1.0));
+    draw_line(p00.x, p00.y, p10.x, p10.y, 1.0, color);
+    draw_line(p10.x, p10.y, p11.x, p11.y, 1.0, color);
+    draw_line(p11.x, p11.y, p01.x, p01.y, 1.0, color);
+    draw_line(p01.x, p01.y, p00.x, p00.y, 1.0, color);
+}
+
+fn lerp_colors(color0: Color, color1: Color, ratio: f32) -> Color {
+    Color::from_vec(color0.to_vec().lerp(color1.to_vec(), ratio))
+}
+
 #[macroquad::main("BasicShapes")]
 async fn main() {
     let mut position = ViewPosition {
@@ -164,8 +195,8 @@ async fn main() {
                 KeyCode::Right => dpos.x += 1.0,
                 KeyCode::Down => dpos.y += 1.0,
                 KeyCode::Up => dpos.y -= 1.0,
-                KeyCode::Z => position.zoom(0.1),
-                KeyCode::X => position.zoom(-0.1),
+                KeyCode::Z => position.zoom(0.05),
+                KeyCode::X => position.zoom(-0.05),
                 KeyCode::Escape => break,
                 _ => {}
             }
@@ -200,35 +231,16 @@ async fn main() {
             for y in s00.y.floor() as i32..s11.y.ceil() as i32 {
                 let mat = mat.mul_mat3(&Mat3::from_translation(Vec2::new(x as f32, y as f32)));
 
-                // draw subbblocks
-                for i in 0..SUBBLOCK_COUNT {
-                    for j in 0..SUBBLOCK_COUNT {
-                        let mat = mat
-                            .mul_mat3(&Mat3::from_scale(Vec2::new(
-                                1.0 / SUBBLOCK_COUNT_F,
-                                1.0 / SUBBLOCK_COUNT_F,
-                            )))
-                            .mul_mat3(&Mat3::from_translation(Vec2::new(i as f32, j as f32)));
-                        let p00 = mat.transform_point2(Vec2::new(0.0, 0.0));
-                        let p10 = mat.transform_point2(Vec2::new(1.0, 0.0));
-                        let p01 = mat.transform_point2(Vec2::new(0.0, 1.0));
-                        let p11 = mat.transform_point2(Vec2::new(1.0, 1.0));
-                        draw_line(p00.x, p00.y, p10.x, p10.y, 1.0, GREEN);
-                        draw_line(p10.x, p10.y, p11.x, p11.y, 1.0, GREEN);
-                        draw_line(p11.x, p11.y, p01.x, p01.y, 1.0, GREEN);
-                        draw_line(p01.x, p01.y, p00.x, p00.y, 1.0, GREEN);
-                    }
+                let color_ratio = ((position.zoom_level - 0.8) / 0.2).clamp(0.0, 1.0);
+                let invisible = Color::new(0.0, 0.0, 0.0, 0.0);
+                let color0 = lerp_colors(BLUE, invisible, color_ratio);
+                let color1 = lerp_colors(GREEN, BLUE, color_ratio);
+                let color2 = lerp_colors(invisible, GREEN, color_ratio);
+                let mut subcolors = vec![color1];
+                if color2.a > 0.0 {
+                    subcolors.push(color2);
                 }
-
-                // draw block
-                let p00 = mat.transform_point2(Vec2::new(0.0, 0.0));
-                let p10 = mat.transform_point2(Vec2::new(1.0, 0.0));
-                let p01 = mat.transform_point2(Vec2::new(0.0, 1.0));
-                let p11 = mat.transform_point2(Vec2::new(1.0, 1.0));
-                draw_line(p00.x, p00.y, p10.x, p10.y, 1.0, BLUE);
-                draw_line(p10.x, p10.y, p11.x, p11.y, 1.0, BLUE);
-                draw_line(p11.x, p11.y, p01.x, p01.y, 1.0, BLUE);
-                draw_line(p01.x, p01.y, p00.x, p00.y, 1.0, BLUE);
+                draw_block(&mat, color0, &subcolors);
             }
         }
 
