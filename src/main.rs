@@ -189,37 +189,48 @@ async fn main() {
             .mul_mat3(&Mat3::from_scale(Vec2::new(scale, scale)))
             .mul_mat3(&Mat3::from_translation(-position.position));
 
-        position.position += mat.inverse().transform_vector2(dpos * sw * 0.01);
+        let mat_inv = mat.inverse();
+        position.position += mat_inv.transform_vector2(dpos * sw * 0.01);
 
-        // and subbblocks
-        for i in 0..SUBBLOCK_COUNT {
-            for j in 0..SUBBLOCK_COUNT {
-                let mat = mat
-                    .mul_mat3(&Mat3::from_scale(Vec2::new(
-                        1.0 / SUBBLOCK_COUNT_F,
-                        1.0 / SUBBLOCK_COUNT_F,
-                    )))
-                    .mul_mat3(&Mat3::from_translation(Vec2::new(i as f32, j as f32)));
+        // camera rect in world coordinates
+        let s00 = mat_inv.transform_point2(Vec2::new(0.0, 0.0));
+        let s11 = mat_inv.transform_point2(Vec2::new(sw, sh));
+
+        for x in s00.x.floor() as i32..s11.x.ceil() as i32 {
+            for y in s00.y.floor() as i32..s11.y.ceil() as i32 {
+                let mat = mat.mul_mat3(&Mat3::from_translation(Vec2::new(x as f32, y as f32)));
+
+                // draw subbblocks
+                for i in 0..SUBBLOCK_COUNT {
+                    for j in 0..SUBBLOCK_COUNT {
+                        let mat = mat
+                            .mul_mat3(&Mat3::from_scale(Vec2::new(
+                                1.0 / SUBBLOCK_COUNT_F,
+                                1.0 / SUBBLOCK_COUNT_F,
+                            )))
+                            .mul_mat3(&Mat3::from_translation(Vec2::new(i as f32, j as f32)));
+                        let p00 = mat.transform_point2(Vec2::new(0.0, 0.0));
+                        let p10 = mat.transform_point2(Vec2::new(1.0, 0.0));
+                        let p01 = mat.transform_point2(Vec2::new(0.0, 1.0));
+                        let p11 = mat.transform_point2(Vec2::new(1.0, 1.0));
+                        draw_line(p00.x, p00.y, p10.x, p10.y, 1.0, GREEN);
+                        draw_line(p10.x, p10.y, p11.x, p11.y, 1.0, GREEN);
+                        draw_line(p11.x, p11.y, p01.x, p01.y, 1.0, GREEN);
+                        draw_line(p01.x, p01.y, p00.x, p00.y, 1.0, GREEN);
+                    }
+                }
+
+                // draw block
                 let p00 = mat.transform_point2(Vec2::new(0.0, 0.0));
                 let p10 = mat.transform_point2(Vec2::new(1.0, 0.0));
                 let p01 = mat.transform_point2(Vec2::new(0.0, 1.0));
                 let p11 = mat.transform_point2(Vec2::new(1.0, 1.0));
-                draw_line(p00.x, p00.y, p10.x, p10.y, 1.0, GREEN);
-                draw_line(p10.x, p10.y, p11.x, p11.y, 1.0, GREEN);
-                draw_line(p11.x, p11.y, p01.x, p01.y, 1.0, GREEN);
-                draw_line(p01.x, p01.y, p00.x, p00.y, 1.0, GREEN);
+                draw_line(p00.x, p00.y, p10.x, p10.y, 1.0, BLUE);
+                draw_line(p10.x, p10.y, p11.x, p11.y, 1.0, BLUE);
+                draw_line(p11.x, p11.y, p01.x, p01.y, 1.0, BLUE);
+                draw_line(p01.x, p01.y, p00.x, p00.y, 1.0, BLUE);
             }
         }
-
-        // draw block
-        let p00 = mat.transform_point2(Vec2::new(0.0, 0.0));
-        let p10 = mat.transform_point2(Vec2::new(1.0, 0.0));
-        let p01 = mat.transform_point2(Vec2::new(0.0, 1.0));
-        let p11 = mat.transform_point2(Vec2::new(1.0, 1.0));
-        draw_line(p00.x, p00.y, p10.x, p10.y, 1.0, BLUE);
-        draw_line(p10.x, p10.y, p11.x, p11.y, 1.0, BLUE);
-        draw_line(p11.x, p11.y, p01.x, p01.y, 1.0, BLUE);
-        draw_line(p01.x, p01.y, p00.x, p00.y, 1.0, BLUE);
 
         draw_text(
             &format!("Arrows,Z,X {:?}", position),
