@@ -19,10 +19,10 @@ I've decided that main building block of space will entity called `block`. That'
 At each time program render some block, lets call it `current block`, and it's subblocks behind. If the user zooms in one the subblocks is selected as current and from this point program renders this new current block and it's subblocks. If the user zoom's out parent block is selected as current.
 
 Each block can be addressed as list of block coordinates:
-	[] - empty list for root block
-	[(1,1)] - child of root block at coordinates 1,1
-	[(1,1), (2,2)] - child of prev.block at coordinates 2,2
-	etc.
+* [] - empty list for root block
+* [(1,1)] - child of root block at coordinates 1,1
+* [(1,1), (2,2)] - child of prev.block at coordinates 2,2
+* etc.
 
 Camera position is specified with block address, coordinates inside block `0.0..1.0`, and zoom level. Zoom level 0 means that current block occupies whole screen, zoom level 1 means that child block of the current block occupies whole screen.
 
@@ -32,8 +32,8 @@ Controls also very basic: arrow keys for pan and 'z' and 'x' keys for zoom.
 
 ### What's next
 
-- panning should be done in screen coordinates. That should be easy.
-- render more all visible top-level blocks, not just the current.
+- panning should be done in screen coordinates. I mean, visible panning speed should not depend on zoom level. That should be easy. 
+- render all visible top-level blocks, not just the current. 
 - separate code into modules. I've tried this, but got compiler errors. Need to read some docs.
 - actual procedural generation of stars. Just random stars without galaxies as the first step. I need to figure out how things should be.
 
