@@ -85,7 +85,9 @@ impl PartialEq for ViewPosition {
     fn eq(&self, other: &Self) -> bool {
         return self.block.eq(&other.block)
             && self.position.abs_diff_eq(other.position, 1e-5)
-            && self.zoom_level.approx_eq(other.zoom_level, F32Margin::default());
+            && self
+                .zoom_level
+                .approx_eq(other.zoom_level, F32Margin::default());
     }
 }
 
@@ -115,7 +117,6 @@ impl ViewPosition {
         let izoom = izoom as i32;
 
         while self.block.get_zoom() > izoom {
-            
             let (block_x, block_y) = self.block.get_last_block_pos();
             self.block.zoom_out();
             self.position.x = (block_x as f32 + self.position.x) / SUBBLOCK_COUNT_F;
@@ -149,18 +150,20 @@ async fn main() {
     let mut position = ViewPosition {
         block: BlockAddress(vec![]),
         position: Vec2::new(0.5, 0.5),
-        zoom_level: 0.0
+        zoom_level: 0.0,
     };
 
     loop {
         clear_background(RED);
 
+        let mut dpos = Vec2::new(0.0, 0.0);
+
         if let Some(key) = get_last_key_pressed() {
             match key {
-                KeyCode::Left => position.offset(-0.1, 0.0),
-                KeyCode::Right => position.offset(0.1, 0.0),
-                KeyCode::Down => position.offset(0.0, 0.1),
-                KeyCode::Up => position.offset(0.0, -0.1),
+                KeyCode::Left => dpos.x -= 1.0,
+                KeyCode::Right => dpos.x += 1.0,
+                KeyCode::Down => dpos.y += 1.0,
+                KeyCode::Up => dpos.y -= 1.0,
                 KeyCode::Z => position.zoom(0.1),
                 KeyCode::X => position.zoom(-0.1),
                 KeyCode::Escape => break,
@@ -168,18 +171,10 @@ async fn main() {
             }
         }
 
-        draw_text(
-            &format!("Arrows,Z,X {:?}", position),
-            20.0,
-            20.0,
-            15.0,
-            BLUE,
-        );
-
         /*
          in world position.block is located in rect (0.0, 0.0, 1.0, 1.0)
          camera center is at position.position
-         scale is such that 
+         scale is such that
               at position.zoom_level == 0.0 - world's 1.0 is equal to screen_width
               at position.zoom_level == 1.0 - world's (1.0 / SUBBLOCK_COUNT) is equal to screen_width
         */
@@ -194,11 +189,16 @@ async fn main() {
             .mul_mat3(&Mat3::from_scale(Vec2::new(scale, scale)))
             .mul_mat3(&Mat3::from_translation(-position.position));
 
+        position.position += mat.inverse().transform_vector2(dpos * sw * 0.01);
+
         // and subbblocks
         for i in 0..SUBBLOCK_COUNT {
             for j in 0..SUBBLOCK_COUNT {
                 let mat = mat
-                    .mul_mat3(&Mat3::from_scale(Vec2::new(1.0 / SUBBLOCK_COUNT_F, 1.0 / SUBBLOCK_COUNT_F)))
+                    .mul_mat3(&Mat3::from_scale(Vec2::new(
+                        1.0 / SUBBLOCK_COUNT_F,
+                        1.0 / SUBBLOCK_COUNT_F,
+                    )))
                     .mul_mat3(&Mat3::from_translation(Vec2::new(i as f32, j as f32)));
                 let p00 = mat.transform_point2(Vec2::new(0.0, 0.0));
                 let p10 = mat.transform_point2(Vec2::new(1.0, 0.0));
@@ -219,7 +219,15 @@ async fn main() {
         draw_line(p00.x, p00.y, p10.x, p10.y, 1.0, BLUE);
         draw_line(p10.x, p10.y, p11.x, p11.y, 1.0, BLUE);
         draw_line(p11.x, p11.y, p01.x, p01.y, 1.0, BLUE);
-        draw_line(p01.x, p01.y, p00.x, p00.y, 1.0, BLUE);        
+        draw_line(p01.x, p01.y, p00.x, p00.y, 1.0, BLUE);
+
+        draw_text(
+            &format!("Arrows,Z,X {:?}", position),
+            20.0,
+            20.0,
+            15.0,
+            BLUE,
+        );
 
         next_frame().await
     }
@@ -239,23 +247,32 @@ mod tests {
             zoom_level: 0.1,
         };
         pos.zoom(1.1);
-        assert_eq!(pos, ViewPosition {
-            block: BlockAddress(vec![IVec2::new(1, 1), IVec2::new(5, 5)]),
-            position: Vec2::new(0.0, 0.0),
-            zoom_level: 0.2,
-        });
+        assert_eq!(
+            pos,
+            ViewPosition {
+                block: BlockAddress(vec![IVec2::new(1, 1), IVec2::new(5, 5)]),
+                position: Vec2::new(0.0, 0.0),
+                zoom_level: 0.2,
+            }
+        );
         pos.zoom(-1.1);
-        assert_eq!(pos, ViewPosition {
-            block: BlockAddress(vec![IVec2::new(1, 1)]),
-            position: Vec2::new(0.5, 0.5),
-            zoom_level: 0.1,
-        });
+        assert_eq!(
+            pos,
+            ViewPosition {
+                block: BlockAddress(vec![IVec2::new(1, 1)]),
+                position: Vec2::new(0.5, 0.5),
+                zoom_level: 0.1,
+            }
+        );
         pos.zoom(-100.0);
-        assert_eq!(pos, ViewPosition {
-            block: BlockAddress(vec![]),
-            position: Vec2::new(0.15, 0.15),
-            zoom_level: 0.0,
-        });
+        assert_eq!(
+            pos,
+            ViewPosition {
+                block: BlockAddress(vec![]),
+                position: Vec2::new(0.15, 0.15),
+                zoom_level: 0.0,
+            }
+        );
     }
 
     #[test]
