@@ -5,7 +5,7 @@ extern crate rand;
 use float_cmp::*;
 use macroquad::prelude::*;
 use more_asserts::*;
-use rand::{rngs::StdRng, RngCore, SeedableRng};
+//use rand::{rngs::StdRng, RngCore, SeedableRng};
 
 const SUBBLOCK_COUNT: i32 = 10;
 const SUBBLOCK_COUNT_F: f32 = SUBBLOCK_COUNT as f32;
@@ -23,7 +23,7 @@ struct BlockAddress(Vec<IVec2>);
 
 impl BlockAddress {
     pub fn offset(&mut self, offset_x: i32, offset_y: i32) {
-        let mut addr = &mut self.0;
+        let addr = &mut self.0;
         let mut i = addr.len();
         let mut dx = offset_x;
         let mut dy = offset_y;
@@ -151,8 +151,6 @@ async fn main() {
         position: Vec2::new(0.5, 0.5),
         zoom_level: 0.0
     };
-
-    let render_depth = 3;
 
     loop {
         clear_background(RED);
