@@ -45,7 +45,15 @@ Subblocks get their random seeds and list of level-0 stars from parent block tha
 
 This idea can be easily expended to galaxies. At level-0 galaxy is just like star: a point with coordinates. At level-1 it can have type (like spiral, elliptical) and other parameters like number of arms for spiral galaxy. At this level it can be rendered as small texture. And at level-2 it can pass star density distribution parameters to subblocks so that they can generate actual stars.
 
-## Day2 part 2
+## Day 1 22/05/2022 part 2
 
 Spent one hour and half.
 Minor improvements.
+
+## Day 2 23/05/2022
+
+Spent about an hour.
+* Added block names and knowledge what block is being drawn, draw block names.
+* Smooth movement using is_key_down instead of last_key_pressed.
+
+Need to draw only subblocks on the screen, because there is huge lag when drawing 3 levels of blocks.
