@@ -1,6 +1,9 @@
 extern crate float_cmp;
 extern crate more_asserts;
 extern crate rand;
+extern crate base64;
+
+use std::{hash::{Hash, Hasher}, collections::hash_map::DefaultHasher};
 
 use float_cmp::*;
 use macroquad::prelude::*;
@@ -18,10 +21,17 @@ Each block can be addressed as vector of IVec2:
     subblock of that subblock is [(1,1), (2,2)]
     and so on
 */
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 struct BlockAddress(Vec<IVec2>);
 
 impl BlockAddress {
+
+	pub fn get_name(&self) -> String {
+		let mut hasher = DefaultHasher::new();
+		self.hash(&mut hasher);
+		base64::encode(hasher.finish().to_ne_bytes())
+	}
+
     pub fn offset(&mut self, offset_x: i32, offset_y: i32) {
         let addr = &mut self.0;
         let mut i = addr.len();
@@ -44,8 +54,12 @@ impl BlockAddress {
     }
 
     pub fn get_last_block_pos(&self) -> (i32, i32) {
-        let last = self.0.last().unwrap();
-        (last.x, last.y)
+        if let Some(last) = self.0.last() {
+        	(last.x, last.y)
+		}
+		else {
+			(0, 0)
+		}
     }
 
     pub fn zoom_in(&mut self, block_x: i32, block_y: i32) {
@@ -145,7 +159,7 @@ impl ViewPosition {
     }
 }
 
-fn draw_block(mat: &Mat3, color: Color, subcolors: &[Color]) {
+fn draw_block(mat: &Mat3, block: &BlockAddress, color: Color, subcolors: &[Color]) {
     if let Some(&color) = subcolors.first() {
         let subcolors = &subcolors[1..];
         for i in 0..SUBBLOCK_COUNT {
@@ -157,7 +171,9 @@ fn draw_block(mat: &Mat3, color: Color, subcolors: &[Color]) {
                     )))
                     .mul_mat3(&Mat3::from_translation(Vec2::new(i as f32, j as f32)));
 
-                draw_block(&mat, color, &subcolors);
+				let mut block = block.clone();
+				block.zoom_in(i, j);
+                draw_block(&mat, &block, color, &subcolors);
             }
         }
     }
@@ -166,6 +182,14 @@ fn draw_block(mat: &Mat3, color: Color, subcolors: &[Color]) {
     let p10 = mat.transform_point2(Vec2::new(1.0, 0.0));
     let p01 = mat.transform_point2(Vec2::new(0.0, 1.0));
     let p11 = mat.transform_point2(Vec2::new(1.0, 1.0));
+
+	let text_dim = measure_text(&block.get_name(), None, 20, 1.0);
+	if text_dim.width < p10.x - p00.x {
+		draw_text(&block.get_name(), 
+			p00.x +(p10.x - p00.x - text_dim.width) * 0.5, 
+			p00.y + (p01.y - p00.y - text_dim.height) * 0.5, 20.0, WHITE);
+	}
+
     draw_line(p00.x, p00.y, p10.x, p10.y, 1.0, color);
     draw_line(p10.x, p10.y, p11.x, p11.y, 1.0, color);
     draw_line(p11.x, p11.y, p01.x, p01.y, 1.0, color);
@@ -176,7 +200,7 @@ fn lerp_colors(color0: Color, color1: Color, ratio: f32) -> Color {
     Color::from_vec(color0.to_vec().lerp(color1.to_vec(), ratio))
 }
 
-#[macroquad::main("BasicShapes")]
+#[macroquad::main("ProceduralGalaxy")]
 async fn main() {
     let mut position = ViewPosition {
         block: BlockAddress(vec![]),
@@ -229,6 +253,10 @@ async fn main() {
 
         for x in s00.x.floor() as i32..s11.x.ceil() as i32 {
             for y in s00.y.floor() as i32..s11.y.ceil() as i32 {
+
+				let mut block = position.block.clone();
+				block.offset(x, y);
+
                 let mat = mat.mul_mat3(&Mat3::from_translation(Vec2::new(x as f32, y as f32)));
 
                 let color_ratio = ((position.zoom_level - 0.8) / 0.2).clamp(0.0, 1.0);
@@ -240,7 +268,7 @@ async fn main() {
                 if color2.a > 0.0 {
                     subcolors.push(color2);
                 }
-                draw_block(&mat, color0, &subcolors);
+                draw_block(&mat, &block, color0, &subcolors);
             }
         }
 
