@@ -57,3 +57,8 @@ Spent about an hour.
 * Smooth movement using is_key_down instead of last_key_pressed.
 
 Need to draw only subblocks on the screen, because there is huge lag when drawing 3 levels of blocks.
+
+## Day 3 02/11/2022
+
+Spent 20 minutes.
+* Extracted BlockAddress to separate file.
