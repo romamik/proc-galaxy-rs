@@ -1,125 +1,248 @@
 extern crate more_asserts;
 
 use macroquad::prelude::*;
-use more_asserts::*;
 
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
 };
 
-pub const SUBBLOCK_COUNT: i32 = 10;
-pub const SUBBLOCK_COUNT_F: f32 = SUBBLOCK_COUNT as f32;
-
 /*
-Each block is subdivided into SUBBLOCK_COUNT * SUBBLOCK_COUNT subblocks
-Each block can be addressed as vector of IVec2:
-    root block is []
-    some subblock of root block is [(1,1)]
-    subblock of that subblock is [(1,1), (2,2)]
-    and so on
+Space is organized in blocks, each block having sub blocks. Coordinates of sub blocks are in range [-HALF_SIZE..HALF_SIZE].
+Block address allows to find a block in space, starting from the root block.
+Root block is {parent: 0, child: []}
+Root block's coordinates in it's parent are (0, 0)
+The procedure is as follows:
+    1. First we get parent of current block `address.parent` times.
+    2. Than we get child of the current block using coordinates from every element of `address.child`.
+Addresses must be unique, so that it is not allowed visit any block twice during this navigation.
 */
+
 #[derive(Debug, Clone, PartialEq, Hash)]
-pub struct BlockAddress(pub Vec<IVec2>);
+pub struct BlockAddress {
+    parent: u32,
+    child: Vec<IVec2>,
+}
 
 impl BlockAddress {
+    pub const HALF_SIZE: i32 = 5;
+    pub const SIZE: i32 = Self::HALF_SIZE * 2 + 1;
+    pub const ROOT: BlockAddress = BlockAddress {
+        parent: 0,
+        child: vec![],
+    };
+
     pub fn get_name(&self) -> String {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
         base64::encode(hasher.finish().to_ne_bytes())
     }
 
-    pub fn offset(&mut self, offset_x: i32, offset_y: i32) {
-        let addr = &mut self.0;
-        let mut i = addr.len();
-        let mut dx = offset_x;
-        let mut dy = offset_y;
-
-        while i > 0 && (dx != 0 || dy != 0) {
-            i -= 1;
-            let x = addr[i].x + dx;
-            let y = addr[i].y + dy;
-            addr[i].x = ((x % SUBBLOCK_COUNT) + SUBBLOCK_COUNT) % SUBBLOCK_COUNT;
-            addr[i].y = ((y % SUBBLOCK_COUNT) + SUBBLOCK_COUNT) % SUBBLOCK_COUNT;
-            dx = (x - addr[i].x) / SUBBLOCK_COUNT;
-            dy = (y - addr[i].y) / SUBBLOCK_COUNT;
+    // changes self to parent of self, returns coordinates of previous self in parent
+    pub fn to_parent(&mut self) -> IVec2 {
+        match self.child.pop() {
+            Some(last) => last,
+            None => {
+                self.parent += 1;
+                IVec2::ZERO
+            }
         }
     }
 
-    pub fn get_zoom(&self) -> i32 {
-        self.0.len() as i32
-    }
-
-    pub fn get_last_block_pos(&self) -> (i32, i32) {
-        if let Some(last) = self.0.last() {
-            (last.x, last.y)
+    // changes self to child of self with given coordinates
+    // if coordinates are out of range set self to child of the corresponding sibling
+    pub fn to_child(&mut self, mut coord: IVec2) {
+        let parent_offset = IVec2::new(
+            Self::put_in_range(&mut coord.x),
+            Self::put_in_range(&mut coord.y),
+        );
+        self.to_sibling(parent_offset);
+        if self.parent > 0 && self.child.len() == 0 && coord.eq(&IVec2::ZERO) {
+            self.parent -= 1;
         } else {
-            (0, 0)
+            self.child.push(coord);
         }
     }
 
-    pub fn zoom_in(&mut self, block_x: i32, block_y: i32) {
-        assert_ge!(block_x, 0);
-        assert_le!(block_x, SUBBLOCK_COUNT);
-        assert_ge!(block_y, 0);
-        assert_le!(block_y, SUBBLOCK_COUNT);
-
-        self.0.push(IVec2::new(block_x, block_y));
+    // changes self to address of block on same level
+    pub fn to_sibling(&mut self, offset: IVec2) {
+        if offset != IVec2::ZERO {
+            let mut coord = self.to_parent();
+            coord += offset;
+            self.to_child(coord);
+        }
     }
 
-    pub fn zoom_out(&mut self) {
-        assert!(!self.0.is_empty());
-        self.0.pop();
+    // given val in block space, puts val in range [-HALF_SIZE..HALF_SIZE] and returns offset in parent space
+    fn put_in_range(val: &mut i32) -> i32 {
+        const HALF_SIZE: i32 = BlockAddress::HALF_SIZE;
+        const SIZE: i32 = BlockAddress::SIZE;
+
+        let new_val = ((*val + HALF_SIZE) % SIZE + SIZE) % SIZE - HALF_SIZE;
+        let remainder = (*val - new_val) / SIZE;
+        *val = new_val;
+        remainder
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use super::*;
+    use itertools::Itertools;
 
-    #[test]
-    fn test_block_address_zoom() {
-        let mut addr = BlockAddress(vec![]);
-        addr.zoom_in(1, 1);
-        assert_eq!(addr, BlockAddress(vec![IVec2::new(1, 1)]));
-        addr.zoom_out();
-        assert_eq!(addr, BlockAddress(vec![]));
+    use super::*;
+    const HALF_SIZE: i32 = BlockAddress::HALF_SIZE;
+    const SIZE: i32 = BlockAddress::SIZE;
+
+    fn make_ba(parent: u32, child: &[(i32, i32)]) -> BlockAddress {
+        BlockAddress {
+            parent: parent,
+            child: child.iter().map(|&(x, y)| IVec2::new(x, y)).collect(),
+        }
     }
 
     #[test]
-    fn test_block_address_offset() {
-        let mut addr = BlockAddress(vec![IVec2::new(5, 5), IVec2::new(0, 0)]);
-        addr.offset(1, 1);
-        assert_eq!(addr, BlockAddress(vec![IVec2::new(5, 5), IVec2::new(1, 1)]));
-        addr.offset(-2, -2);
-        assert_eq!(
-            addr,
-            BlockAddress(vec![
-                IVec2::new(4, 4),
-                IVec2::new(SUBBLOCK_COUNT - 1, SUBBLOCK_COUNT - 1)
-            ])
-        );
+    fn test_put_in_range() {
+        for (start_val, expect_val, expect_parent_offset) in [
+            (0, 0, 0),
+            (HALF_SIZE, HALF_SIZE, 0),
+            (HALF_SIZE + 1, -HALF_SIZE, 1),
+            (SIZE, 0, 1),
+            (SIZE * SIZE + 1, 1, SIZE),
+            (-HALF_SIZE, -HALF_SIZE, 0),
+            (-HALF_SIZE - 1, HALF_SIZE, -1),
+            (-SIZE, 0, -1),
+            (-SIZE * SIZE - 1, -1, -SIZE),
+        ] {
+            let mut val = start_val;
+            let parent_offset = BlockAddress::put_in_range(&mut val);
+            assert_eq!(val, expect_val, "start_val: {}", start_val);
+            assert_eq!(
+                parent_offset, expect_parent_offset,
+                "start_val: {}",
+                start_val
+            );
+        }
+    }
 
-        let mut addr = BlockAddress(vec![IVec2::new(5, 5), IVec2::new(0, 0)]);
-        addr.offset(SUBBLOCK_COUNT + 1, 0);
-        assert_eq!(addr, BlockAddress(vec![IVec2::new(6, 5), IVec2::new(1, 0)]));
-        addr.offset(0, SUBBLOCK_COUNT + 1);
-        assert_eq!(addr, BlockAddress(vec![IVec2::new(6, 6), IVec2::new(1, 1)]));
+    #[test]
+    fn test_to_parent() {
+        for (start_block, expect_block, (expect_x, expect_y)) in [
+            (BlockAddress::ROOT, make_ba(1, &[]), (0, 0)),
+            (make_ba(1, &[]), make_ba(2, &[]), (0, 0)),
+            (make_ba(0, &[(0, 0)]), BlockAddress::ROOT, (0, 0)),
+            (
+                make_ba(0, &[(HALF_SIZE, HALF_SIZE)]),
+                BlockAddress::ROOT,
+                (HALF_SIZE, HALF_SIZE),
+            ),
+            (
+                make_ba(2, &[(HALF_SIZE, HALF_SIZE)]),
+                make_ba(2, &[]),
+                (HALF_SIZE, HALF_SIZE),
+            ),
+        ] {
+            let mut block = start_block.clone();
+            let coord = block.to_parent();
+            assert_eq!(block, expect_block, "start_block: {:?}", start_block);
+            assert_eq!(
+                coord,
+                IVec2::new(expect_x, expect_y),
+                "start_block: {:?}",
+                start_block
+            );
+        }
+    }
 
-        let mut addr = BlockAddress(vec![IVec2::new(5, 5), IVec2::new(0, 0)]);
-        addr.offset(-SUBBLOCK_COUNT * 2 - 1, 0);
-        assert_eq!(
-            addr,
-            BlockAddress(vec![IVec2::new(2, 5), IVec2::new(SUBBLOCK_COUNT - 1, 0)])
-        );
-        addr.offset(0, -SUBBLOCK_COUNT * 2 - 1);
-        assert_eq!(
-            addr,
-            BlockAddress(vec![
-                IVec2::new(2, 2),
-                IVec2::new(SUBBLOCK_COUNT - 1, SUBBLOCK_COUNT - 1)
-            ])
-        );
+    #[test]
+    fn test_to_child() {
+        fn test(
+            start_parent: u32,
+            start_child: &[(i32, i32)],
+            x: i32,
+            y: i32,
+            expect_parent: u32,
+            expect_child: &[(i32, i32)],
+        ) {
+            let start = make_ba(start_parent, start_child);
+            let expect = make_ba(expect_parent, expect_child);
+            let coord = IVec2::new(x, y);
+            let mut block = start.clone();
+            block.to_child(IVec2::new(x, y));
+            assert_eq!(
+                block, expect,
+                "start_block: {:?}, coord: {}, {}",
+                start, x, y
+            );
+        }
+
+        test(0, &[], 0, 0, 0, &[(0, 0)]);
+        test(0, &[], HALF_SIZE, 0, 0, &[(HALF_SIZE, 0)]);
+        test(0, &[], 0, HALF_SIZE, 0, &[(0, HALF_SIZE)]);
+        test(0, &[], HALF_SIZE + 1, 0, 1, &[(1, 0), (-HALF_SIZE, 0)]);
+        test(0, &[], 0, HALF_SIZE + 1, 1, &[(0, 1), (0, -HALF_SIZE)]);
+        test(0, &[], SIZE, 0, 1, &[(1, 0), (0, 0)]);
+        test(0, &[], 0, SIZE, 1, &[(0, 1), (0, 0)]);
+        test(0, &[], SIZE * SIZE, 0, 2, &[(1, 0), (0, 0), (0, 0)]);
+        test(0, &[], 0, SIZE * SIZE, 2, &[(0, 1), (0, 0), (0, 0)]);
+    }
+
+    #[test]
+    fn test_to_sibling() {
+        fn test(start: &BlockAddress, offset: &(i32, i32), expected: &BlockAddress) {
+            let mut block = start.clone();
+            block.to_sibling(IVec2::new(offset.0, offset.1));
+            assert_eq!(
+                block, *expected,
+                "start_block: {:?}, offset: {:?}",
+                start, offset
+            );
+        }
+        fn test2(
+            start_parent: u32,
+            start_child: &[i32],
+            offset: i32,
+            expected_parent: u32,
+            expected_child: &[i32],
+        ) {
+            for (kx, ky) in (-1..=1)
+                .permutations(2)
+                .map(|v| v.into_iter().collect_tuple().unwrap())
+            {
+                let make_child =
+                    |slice: &[i32]| slice.iter().map(|&v| (kx * v, ky * v)).collect::<Vec<_>>();
+
+                let start = make_ba(start_parent, &make_child(start_child));
+                let offset_vec = (kx * offset, ky * offset);
+                let neg_offset_vec = (-kx * offset, -ky * offset);
+                let expected = make_ba(expected_parent, &make_child(expected_child));
+                test(&start, &offset_vec, &expected);
+                test(&expected, &neg_offset_vec, &start);
+            }
+        }
+        test2(0, &[], 0, 0, &[]);
+        test2(0, &[], 1, 1, &[1]);
+        test2(0, &[], HALF_SIZE, 1, &[HALF_SIZE]);
+        test2(0, &[], HALF_SIZE + 1, 2, &[1, -HALF_SIZE]);
+        test2(0, &[], SIZE, 2, &[1, 0]);
+        test2(0, &[], SIZE, 2, &[1, 0]);
+    }
+
+    #[test]
+    fn test_name() {
+        let mut block_0 = BlockAddress::ROOT.clone();
+        let mut block_1 = BlockAddress::ROOT.clone();
+        assert_eq!(block_0.get_name(), block_1.get_name());
+
+        block_0.to_sibling(IVec2::new(1, 0));
+        assert_ne!(block_0.get_name(), block_1.get_name());
+
+        block_0.to_sibling(IVec2::new(-1, 0));
+        assert_eq!(block_0.get_name(), block_1.get_name());
+
+        block_0.to_sibling(IVec2::new(-1, 0));
+        block_0.to_sibling(IVec2::new(-1, 0));
+        block_1.to_sibling(IVec2::new(-2, 0));
+        assert_eq!(block_0.get_name(), block_1.get_name());
     }
 }

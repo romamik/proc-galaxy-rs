@@ -62,3 +62,27 @@ Need to draw only subblocks on the screen, because there is huge lag when drawin
 
 Spent 20 minutes.
 * Extracted BlockAddress to separate file.
+
+## Days 4-5 17/11/2022-18/11/2022
+Spent 6 hours.
+
+Decided to implement truly infinite space by allowing to zoom out of parent block. Also, I've come up with a different idea of how things should work.
+
+Allowing to zoom out of the parent block is easy: just add a field to address saying how much to zoom out, before zooming in. The only thing that will add some difficulty here is that I should make sure that addresses are unambiguous. 
+
+The idea of how things should work: every block knows objects that intersect it. And an object can intersect different blocks. First of all, we find out which blocks are on the screen, then we collect a list of objects that intersect them, and then render the objects. Generating objects is as follows: when we ask a block which objects it has, it generates some objects by itself from its random seed, in the final application that would be galaxies, and may not every block will have one. And also asks the parent block if it has some objects that it wants to pass to this block. Parent block looks at objects it has and generates child objects for some of them, and returns objects, that intersect the asking block. For example, a galaxy can produce some galaxy parts, and a galaxy part can produce basic stars, and a basic star can produce a detailed star. When asking a block for objects should be able to specify how far away the original asking block is so that we do not have to go into parent blocks infinitely, but only produce objects that will be present in the original asking block.
+
+What operations do we need on block_address:
+	Rendering:
+		1. We know the current block: the block in the center of the screen, and some transformation matrix: offset, rotation, zoom. 
+		2. Coordinates are as following: current block is from 0 to 1 on both axis.
+		3. We should find all blocks that are on the screen. We need a `block_address.offset()` function for that.
+	Panning and zooming:
+		1. If we find out that the center of the screen is not inside the current block, then we need to find the new current block and adjust the transformation matrix. Looks like we also need block_address.offset() for this.
+		2. If we find out that the size of the block on the screen is bigger than the screen width we need to select one of its children as a new current block and adjust the transformation matrix. We can select just the center child block and then apply procedure from previous paragraph. So we need `block_address.get_center_child()` function.
+		3. If we find out that the size of the parent block is smaller than the width of the screen, then we should select the parent block as the current block and adjust the transformation matrix. We will need the `block_address.get_parent()` function that will return the parent block and coordinates of the current block in it, so the return type should be `(BlockAddress, IVec2)`
+
+	Generating objects:
+		1. We need to find a parent block and coordinates of self in it. `block_address.get_parent()` will go.
+
+Reimplemented block_address.
